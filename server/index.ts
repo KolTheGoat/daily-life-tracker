@@ -43,6 +43,9 @@ app.get('/api/dashboard',auth,async(req:any,res)=>{let history=demoEntries;if(po
 app.post('/api/entries',auth,async(req:any,res)=>{const entry={...req.body,date:req.body.date||new Date().toISOString().slice(0,10)};const idx=demoEntries.findIndex(e=>e.date===entry.date);idx>=0?demoEntries[idx]={...demoEntries[idx],...entry}:demoEntries.push(entry);if(pool){await pool.query(`INSERT INTO daily_entries(user_id,entry_date,weight,calories,protein,water,sleep,steps,mood,energy,stress,workout_minutes,notes,habits) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT(user_id,entry_date) DO UPDATE SET weight=$3,calories=$4,protein=$5,water=$6,sleep=$7,steps=$8,mood=$9,energy=$10,stress=$11,workout_minutes=$12,notes=$13,habits=$14`,[req.user.id,entry.date,entry.weight,entry.calories,entry.protein,entry.water,entry.sleep,entry.steps,entry.mood,entry.energy,entry.stress,entry.workoutMinutes,entry.notes,JSON.stringify(entry.habits||{})])}res.json({ok:true,entry})});
 app.patch('/api/notifications/:id/read',auth,(req,res)=>{const n=notifications.find(x=>x.id===Number(req.params.id));if(n)n.isRead=true;res.json({ok:true})});
 app.post('/api/push/subscribe',auth,async(req:any,res)=>{if(pool)await pool.query('INSERT INTO push_subscriptions(user_id,subscription) VALUES($1,$2)',[req.user.id,req.body]);res.status(201).json({ok:true})});
+const defaultPreferences={profile:{name:'',email:'',age:'',height:'',weight:''},targets:{calories:2200,protein:140,water:2.5,steps:10000},settings:{notifications:true,weekly:true,penalties:false,dark:true},customGoals:[],onboardingComplete:false};
+app.get('/api/preferences',auth,async(req:any,res)=>{if(!pool)return res.json(defaultPreferences);const q=await pool.query('SELECT * FROM user_preferences WHERE user_id=$1',[req.user.id]);if(!q.rows[0])return res.json(defaultPreferences);const p=q.rows[0];res.json({profile:p.profile,targets:p.targets,settings:p.settings,customGoals:p.custom_goals,onboardingComplete:p.onboarding_complete})});
+app.put('/api/preferences',auth,async(req:any,res)=>{const value={...defaultPreferences,...req.body};if(pool)await pool.query(`INSERT INTO user_preferences(user_id,profile,targets,settings,custom_goals,onboarding_complete,updated_at) VALUES($1,$2,$3,$4,$5,$6,now()) ON CONFLICT(user_id) DO UPDATE SET profile=$2,targets=$3,settings=$4,custom_goals=$5,onboarding_complete=$6,updated_at=now()`,[req.user.id,JSON.stringify(value.profile),JSON.stringify(value.targets),JSON.stringify(value.settings),JSON.stringify(value.customGoals),Boolean(value.onboardingComplete)]);res.json({ok:true,preferences:value})});
 
 const vapidPublic=process.env.VAPID_PUBLIC_KEY, vapidPrivate=process.env.VAPID_PRIVATE_KEY;
 if(vapidPublic&&vapidPrivate)webpush.setVapidDetails('mailto:admin@daylight.app',vapidPublic,vapidPrivate);
@@ -52,7 +55,7 @@ cron.schedule('0 17 * * *',()=>scheduled('Hydration check','A glass of water now
 cron.schedule('0 22 * * *',()=>scheduled('Protect your streak','Complete today’s log before the day ends.','streak'),{timezone:process.env.TZ||'Asia/Jerusalem'});
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-app.use(express.static(path.join(root,'dist'))); app.get('/{*splat}',(_req,res)=>res.sendFile(path.join(root,'dist','index.html')));
+app.use(express.static(path.join(root,'dist'),{setHeaders:(res,file)=>{if(file.endsWith('index.html'))res.setHeader('Cache-Control','no-store, max-age=0')}})); app.get('/{*splat}',(_req,res)=>{res.setHeader('Cache-Control','no-store, max-age=0');res.sendFile(path.join(root,'dist','index.html'))});
 async function start(){
   if(pool){
     const schema=await fs.readFile(path.join(root,'server','schema.sql'),'utf8');
