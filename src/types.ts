@@ -1,0 +1,2 @@
+export type Entry={date:string;weight:number;calories:number;protein:number;water:number;sleep:number;steps:number;mood:number;energy:number;stress:number;workoutMinutes:number;notes:string;habits:Record<string,boolean>};
+export type DashboardData={user:{name:string;xp:number;coins:number;level:number;nextLevelXp:number;streak:number};today:Entry;history:Entry[];notifications:{id:number;title:string;message:string;type:string;isRead:boolean;createdAt:string}[];goals:{id:number;title:string;progress:number;target:number;color:string}[]};
